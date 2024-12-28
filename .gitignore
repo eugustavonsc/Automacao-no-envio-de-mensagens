@@ -1,4 +1,4 @@
 config.env
-clientes.xlsx
 mensagem.txt
 venv
+*xlsx
