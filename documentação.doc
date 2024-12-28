@@ -1,0 +1,49 @@
+"""
+main.py
+
+Este script é responsável por processar dados de clientes a partir de um arquivo Excel (clientes.xlsx).
+Ele lê os dados do arquivo, realiza operações de processamento e gera relatórios ou saídas conforme necessário.
+
+Funções principais:
+- carregar_dados: Carrega os dados do arquivo Excel em um DataFrame.
+- processar_dados: Realiza operações de processamento nos dados carregados.
+- gerar_relatorio: Gera um relatório com base nos dados processados.
+
+clientes.xlsx
+
+Este arquivo Excel contém informações sobre os clientes. As colunas típicas podem incluir:
+- Nome: Nome do cliente.
+- Idade: Idade do cliente.
+- Email: Endereço de email do cliente.
+- Telefone: Número de telefone do cliente.
+- Endereço: Endereço residencial do cliente.
+
+O arquivo é utilizado pelo script main.py para carregar e processar os dados dos clientes.
+"""
+Configuração do Ambiente Virtual
+
+Para rodar o script main.py em um ambiente virtual, siga os passos abaixo:
+
+1. Crie um ambiente virtual:
+    ```sh
+    python -m venv venv
+    ```
+
+2. Ative o ambiente virtual:
+    - No Windows:
+      ```sh
+      venv\Scripts\activate
+      ```
+    - No macOS/Linux:
+      ```sh
+      source venv/bin/activate
+      ```
+
+3. Instale as dependências necessárias:
+    pip install pandas openpyxl requests python-dotenv
+
+
+4. Execute o script main.py:
+
+Certifique-se de que os arquivos `clientes.xlsx` e mensagem.txt estejam no mesmo diretório que o script `main.py` ou ajuste o caminho conforme necessário.
+OBS: Certifique-se que o arquivo config.env esteja devidamente configurado com as API´s para prosseguir com o processo.
