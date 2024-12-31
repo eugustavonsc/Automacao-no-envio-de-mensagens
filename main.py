@@ -17,6 +17,16 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
+def normalizar_numero(numero):
+
+    try:
+        numero = str(numero).strip()
+        if numero.endswith(".0"):
+            numero = numero[:-2]  # Remove '.0' do final
+        return numero
+    except Exception:
+        return None  # Retorna None se houver erro
+
 def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=22):
 
     payload = {
@@ -49,16 +59,17 @@ def processar_planilha_e_enviar_mensagens(caminho_planilha, mensagem_universal):
             print("A planilha deve conter uma coluna chamada 'numero'.")
             return
 
-        # Remover duplicatas e valores inválidos
-        numeros = df["numero"].drop_duplicates().dropna().astype(str).str.strip()
+        # Remover duplicatas, valores inválidos e normalizar os números
+        numeros = df["numero"].drop_duplicates().dropna().apply(normalizar_numero)
 
         resultados = []
         for numero in numeros:
-            resultado = enviar_mensagem_texto(numero, mensagem_universal)
-            resultados.append(resultado)
+            if numero:  # Enviar apenas se o número for válido
+                resultado = enviar_mensagem_texto(numero, mensagem_universal)
+                resultados.append(resultado)
 
-            # Pausa entre os envios para evitar sobrecarga
-            time.sleep(0.5)  # Ajuste conforme necessário
+                # Pausa entre os envios para evitar sobrecarga
+                time.sleep(0.5)  # Ajuste conforme necessário
 
         # Salvar os resultados em um arquivo Excel
         resultados_df = pd.DataFrame(resultados)
