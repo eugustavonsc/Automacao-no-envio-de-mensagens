@@ -3,32 +3,37 @@ from tkinter import filedialog, messagebox
 import pandas as pd
 import requests
 from dotenv import load_dotenv
+from pathlib import Path
 import os
 import time
 
-# Carregar variáveis de ambiente
-load_dotenv("config.env")
+# Variável para armazenar o caminho do config.env
+config_env_path = None
 
-API_URL = os.getenv("API_URL")
-API_TOKEN = os.getenv("API_TOKEN")
-if not API_URL or not API_TOKEN:
-    raise ValueError("API_URL ou API_TOKEN não foram definidos. Verifique o arquivo config.env.")
+# Função para carregar as variáveis de ambiente
+def carregar_config_env(caminho_config):
+    global config_env_path
+    config_env_path = Path(caminho_config)
+    if not config_env_path.is_file():
+        messagebox.showerror("Erro", "Arquivo config.env não encontrado!")
+        return False
 
-HEADERS = {
-    "Authorization": f"Bearer {API_TOKEN}",
-    "Content-Type": "application/json"
-}
+    load_dotenv(config_env_path)
+    return True
 
-def normalizar_numero(numero):
-    try:
-        numero = str(numero).strip()
-        if numero.endswith(".0"):
-            numero = numero[:-2]
-        return numero
-    except Exception:
-        return None
-
+# Função para enviar mensagem
 def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=22):
+    api_url = os.getenv("API_URL")
+    api_token = os.getenv("API_TOKEN")
+    
+    if not api_url or not api_token:
+        raise ValueError("API_URL ou API_TOKEN não estão definidos no config.env.")
+    
+    headers = {
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json"
+    }
+
     payload = {
         "number": numero,
         "openTicket": str(abrir_ticket),
@@ -37,7 +42,7 @@ def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=22):
     }
 
     try:
-        response = requests.post(API_URL, headers=HEADERS, json=payload)
+        response = requests.post(api_url, headers=headers, json=payload)
         if response.status_code == 200:
             return {"numero": numero, "status": "Sucesso"}
         else:
@@ -45,13 +50,14 @@ def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=22):
     except Exception as e:
         return {"numero": numero, "status": f"Erro: {e}"}
 
+# Processa a planilha e envia mensagens
 def processar_planilha(caminho_planilha, caminho_mensagem):
     try:
         with open(caminho_mensagem, "r", encoding="utf-8") as file:
             mensagem_universal = file.read().strip()
 
         df = pd.read_excel(caminho_planilha, usecols=["numero"])
-        numeros = df["numero"].drop_duplicates().dropna().apply(normalizar_numero)
+        numeros = df["numero"].drop_duplicates().dropna().apply(lambda x: str(x).strip().rstrip(".0"))
 
         resultados = []
         for numero in numeros:
@@ -66,6 +72,15 @@ def processar_planilha(caminho_planilha, caminho_mensagem):
     except Exception as e:
         messagebox.showerror("Erro", f"Erro ao processar a planilha: {e}")
 
+# Selecionar o arquivo config.env
+def selecionar_config_env():
+    caminho = filedialog.askopenfilename(filetypes=[("Arquivos ENV", "*.env")])
+    if caminho:
+        sucesso = carregar_config_env(caminho)
+        if sucesso:
+            messagebox.showinfo("Configuração", "Config.env carregado com sucesso!")
+
+# Selecionar outros arquivos
 def selecionar_arquivo_entrada():
     caminho = filedialog.askopenfilename(filetypes=[("Arquivos Excel", "*.xlsx")])
     entrada_var.set(caminho)
@@ -75,6 +90,10 @@ def selecionar_arquivo_mensagem():
     mensagem_var.set(caminho)
 
 def iniciar_envio():
+    if not config_env_path:
+        messagebox.showwarning("Aviso", "Selecione um arquivo config.env antes de continuar.")
+        return
+
     caminho_planilha = entrada_var.get()
     caminho_mensagem = mensagem_var.get()
     if not caminho_planilha or not caminho_mensagem:
@@ -82,21 +101,26 @@ def iniciar_envio():
         return
     processar_planilha(caminho_planilha, caminho_mensagem)
 
-
+# Criar interface gráfica
 janela = tk.Tk()
 janela.title("Envio de Mensagens")
 
 entrada_var = tk.StringVar()
 mensagem_var = tk.StringVar()
 
-tk.Label(janela, text="Planilha de Números:").grid(row=0, column=0, padx=10, pady=5, sticky="w")
-tk.Entry(janela, textvariable=entrada_var, width=50).grid(row=0, column=1, padx=10, pady=5)
-tk.Button(janela, text="Selecionar", command=selecionar_arquivo_entrada).grid(row=0, column=2, padx=10, pady=5)
+# Configuração do config.env
+tk.Button(janela, text="Selecionar Config.env", command=selecionar_config_env, bg="blue", fg="white").grid(row=0, column=1, padx=10, pady=10)
 
-tk.Label(janela, text="Arquivo de Mensagem:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
-tk.Entry(janela, textvariable=mensagem_var, width=50).grid(row=1, column=1, padx=10, pady=5)
-tk.Button(janela, text="Selecionar", command=selecionar_arquivo_mensagem).grid(row=1, column=2, padx=10, pady=5)
+# Seleção de arquivos
+tk.Label(janela, text="Planilha de Números:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
+tk.Entry(janela, textvariable=entrada_var, width=50).grid(row=1, column=1, padx=10, pady=5)
+tk.Button(janela, text="Selecionar", command=selecionar_arquivo_entrada).grid(row=1, column=2, padx=10, pady=5)
 
-tk.Button(janela, text="Iniciar Envio", command=iniciar_envio, bg="green", fg="white").grid(row=2, column=1, padx=10, pady=10)
+tk.Label(janela, text="Arquivo de Mensagem:").grid(row=2, column=0, padx=10, pady=5, sticky="w")
+tk.Entry(janela, textvariable=mensagem_var, width=50).grid(row=2, column=1, padx=10, pady=5)
+tk.Button(janela, text="Selecionar", command=selecionar_arquivo_mensagem).grid(row=2, column=2, padx=10, pady=5)
+
+# Botão de início
+tk.Button(janela, text="Iniciar Envio", command=iniciar_envio, bg="green", fg="white").grid(row=3, column=1, padx=10, pady=10)
 
 janela.mainloop()
