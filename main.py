@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from pathlib import Path
 import os
 import time
+import threading
+from queue import Queue
 
 # Variável para armazenar o caminho do config.env
 config_env_path = None
@@ -45,13 +47,23 @@ def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=22):
         response = requests.post(api_url, headers=headers, json=payload)
         if response.status_code == 200:
             response_data = response.json()
-            nome = response_data.get("ticket", {}).get("contact", {}).get("name", "Desconhecido")  # Obtém o nome
+            nome = response_data.get("ticket", {}).get("contact", {}).get("name", "Desconhecido")
             status_envio = response_data.get("mensagem", "Mensagem enviada")
             return {"nome": nome, "numero": numero, "status": status_envio}
         else:
             return {"nome": "N/A", "numero": numero, "status": f"Erro {response.status_code}: {response.text}"}
     except Exception as e:
         return {"nome": "N/A", "numero": numero, "status": f"Erro: {e}"}
+
+# Função que executa o envio em threads
+def processar_envio_thread(queue, resultados, mensagem_universal):
+    while not queue.empty():
+        numero = queue.get()
+        if numero:
+            resultado = enviar_mensagem_texto(numero, mensagem_universal)
+            resultados.append(resultado)
+            time.sleep(0.5)  # Evitar sobrecarregar a API
+        queue.task_done()
 
 # Processa a planilha e envia mensagens
 def processar_planilha(caminho_planilha, caminho_mensagem):
@@ -62,13 +74,25 @@ def processar_planilha(caminho_planilha, caminho_mensagem):
         df = pd.read_excel(caminho_planilha, usecols=["numero"])
         numeros = df["numero"].drop_duplicates().dropna().apply(lambda x: str(x).strip().rstrip(".0"))
 
+        queue = Queue()
         resultados = []
-        for numero in numeros:
-            if numero:
-                resultado = enviar_mensagem_texto(numero, mensagem_universal)
-                resultados.append(resultado)
-                time.sleep(0.5)
 
+        # Adiciona os números à fila
+        for numero in numeros:
+            queue.put(numero)
+
+        # Cria threads para processar o envio
+        threads = []
+        for _ in range(10):  # Número de threads (ajuste conforme necessário)
+            thread = threading.Thread(target=processar_envio_thread, args=(queue, resultados, mensagem_universal))
+            thread.start()
+            threads.append(thread)
+
+        # Aguarda todas as threads terminarem
+        for thread in threads:
+            thread.join()
+
+        # Salva os resultados no arquivo Excel
         resultados_df = pd.DataFrame(resultados)
         resultados_df.to_excel("resultados_envio.xlsx", index=False)
         messagebox.showinfo("Concluído", "Mensagens enviadas com sucesso! Resultados salvos em 'resultados_envio.xlsx'.")
@@ -111,10 +135,10 @@ janela.title("Envio de Mensagens")
 entrada_var = tk.StringVar()
 mensagem_var = tk.StringVar()
 
-
+# Configuração do config.env
 tk.Button(janela, text="Selecionar Config.env", command=selecionar_config_env, bg="blue", fg="white").grid(row=0, column=1, padx=10, pady=10)
 
-
+# Seleção de arquivos
 tk.Label(janela, text="Planilha de Números:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
 tk.Entry(janela, textvariable=entrada_var, width=50).grid(row=1, column=1, padx=10, pady=5)
 tk.Button(janela, text="Selecionar", command=selecionar_arquivo_entrada).grid(row=1, column=2, padx=10, pady=5)
@@ -123,7 +147,7 @@ tk.Label(janela, text="Arquivo de Mensagem:").grid(row=2, column=0, padx=10, pad
 tk.Entry(janela, textvariable=mensagem_var, width=50).grid(row=2, column=1, padx=10, pady=5)
 tk.Button(janela, text="Selecionar", command=selecionar_arquivo_mensagem).grid(row=2, column=2, padx=10, pady=5)
 
-
+# Botão de início
 tk.Button(janela, text="Iniciar Envio", command=iniciar_envio, bg="green", fg="white").grid(row=3, column=1, padx=10, pady=10)
 
 janela.mainloop()
