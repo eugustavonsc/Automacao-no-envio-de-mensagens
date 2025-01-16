@@ -44,11 +44,14 @@ def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=22):
     try:
         response = requests.post(api_url, headers=headers, json=payload)
         if response.status_code == 200:
-            return {"numero": numero, "status": "Sucesso"}
+            response_data = response.json()
+            nome = response_data.get("ticket", {}).get("contact", {}).get("name", "Desconhecido")  # Obtém o nome
+            status_envio = response_data.get("mensagem", "Mensagem enviada")
+            return {"nome": nome, "numero": numero, "status": status_envio}
         else:
-            return {"numero": numero, "status": f"Erro {response.status_code}: {response.text}"}
+            return {"nome": "N/A", "numero": numero, "status": f"Erro {response.status_code}: {response.text}"}
     except Exception as e:
-        return {"numero": numero, "status": f"Erro: {e}"}
+        return {"nome": "N/A", "numero": numero, "status": f"Erro: {e}"}
 
 # Processa a planilha e envia mensagens
 def processar_planilha(caminho_planilha, caminho_mensagem):
@@ -108,10 +111,10 @@ janela.title("Envio de Mensagens")
 entrada_var = tk.StringVar()
 mensagem_var = tk.StringVar()
 
-# Configuração do config.env
+
 tk.Button(janela, text="Selecionar Config.env", command=selecionar_config_env, bg="blue", fg="white").grid(row=0, column=1, padx=10, pady=10)
 
-# Seleção de arquivos
+
 tk.Label(janela, text="Planilha de Números:").grid(row=1, column=0, padx=10, pady=5, sticky="w")
 tk.Entry(janela, textvariable=entrada_var, width=50).grid(row=1, column=1, padx=10, pady=5)
 tk.Button(janela, text="Selecionar", command=selecionar_arquivo_entrada).grid(row=1, column=2, padx=10, pady=5)
@@ -120,7 +123,7 @@ tk.Label(janela, text="Arquivo de Mensagem:").grid(row=2, column=0, padx=10, pad
 tk.Entry(janela, textvariable=mensagem_var, width=50).grid(row=2, column=1, padx=10, pady=5)
 tk.Button(janela, text="Selecionar", command=selecionar_arquivo_mensagem).grid(row=2, column=2, padx=10, pady=5)
 
-# Botão de início
+
 tk.Button(janela, text="Iniciar Envio", command=iniciar_envio, bg="green", fg="white").grid(row=3, column=1, padx=10, pady=10)
 
 janela.mainloop()
