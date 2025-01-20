@@ -15,6 +15,8 @@ Este script automatiza o processamento de dados de clientes a partir de um arqui
 1. Coloque o arquivo `clientes.xlsx` no mesmo diretório do script.
 2. Configure o arquivo `config.env` com as variáveis de ambiente necessárias, incluindo a API.
 3. Execute o executável para processar os dados e gerar os relatórios.
+2. Configure o arquivo `config.env` com as variáveis de ambiente necessárias.
+3. Execute o script para processar os dados e gerar os relatórios.
 4. Utilize a interface gráfica para seleção de arquivos e envio de mensagens.
 
 ## Requisitos
