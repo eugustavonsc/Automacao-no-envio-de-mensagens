@@ -83,7 +83,7 @@ def processar_planilha(caminho_planilha, caminho_mensagem):
 
         # Cria threads para processar o envio
         threads = []
-        for _ in range(10):  # Número de threads (ajuste conforme necessário)
+        for _ in range(10):  # Número de threads 
             thread = threading.Thread(target=processar_envio_thread, args=(queue, resultados, mensagem_universal))
             thread.start()
             threads.append(thread)
