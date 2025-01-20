@@ -8,6 +8,8 @@ Funções principais:
 - carregar_dados: Carrega os dados do arquivo Excel em um DataFrame.
 - processar_dados: Realiza operações de processamento nos dados carregados.
 - gerar_relatorio: Gera um relatório com base nos dados processados.
+- envio_mensagens_multithread: Adiciona suporte para envio de mensagens em múltiplas threads.
+- interface_grafica: Adiciona uma interface gráfica para seleção de arquivos e envio de mensagens.
 
 clientes.xlsx
 
@@ -20,36 +22,13 @@ Este arquivo Excel contém informações sobre os clientes. As colunas típicas 
 
 O arquivo é utilizado pelo script main.py para carregar e processar os dados dos clientes.
 
-Configuração do Ambiente Virtual
+Configuração do Arquivo config.env
 
-Para rodar o script main.py em um ambiente virtual, siga os passos abaixo:
+Certifique-se de que o arquivo `config.env` esteja devidamente configurado com as variáveis de ambiente necessárias, incluindo a API.
 
-1. Crie um ambiente virtual:
-  ```sh
-  python -m venv venv
-  ```
+Execução do Executável
 
-2. Ative o ambiente virtual:
-  - No Windows:
-    ```sh
-    venv\Scripts\activate
-    ```
-  - No macOS/Linux:
-    ```sh
-    source venv/bin/activate
-    ```
-
-3. Instale as dependências necessárias:
-  ```sh
-  pip install pandas openpyxl requests python-dotenv
-  ```
-
-4. Execute o script main.py:
-  ```sh
-  python main.py
-  ```
-
-Certifique-se de que os arquivos `clientes.xlsx` e `mensagem.txt` estejam no mesmo diretório que o script `main.py` ou ajuste o caminho conforme necessário.
+Para rodar o script principal, execute o arquivo executável fornecido no repositório. Certifique-se de que os arquivos `clientes.xlsx` e `config.env` estejam no mesmo diretório que o executável ou ajuste o caminho conforme necessário.
 
 OBS: Certifique-se que o arquivo `config.env` esteja devidamente configurado com as APIs para prosseguir com o processo.
 """
