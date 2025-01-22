@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 import pandas as pd
 import requests
 from dotenv import load_dotenv
@@ -48,25 +48,28 @@ def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=22):
         if response.status_code == 200:
             response_data = response.json()
             nome = response_data.get("ticket", {}).get("contact", {}).get("name", "Desconhecido")
-            status_envio = response_data.get("mensagem", "Mensagem enviada")
-            return {"nome": nome, "numero": numero, "status": status_envio}
+            return {"nome": nome, "numero": numero, "status": "Sucesso"}
         else:
             return {"nome": "N/A", "numero": numero, "status": f"Erro {response.status_code}: {response.text}"}
     except Exception as e:
         return {"nome": "N/A", "numero": numero, "status": f"Erro: {e}"}
 
-# Função que executa o envio em threads
-def processar_envio_thread(queue, resultados, mensagem_universal):
+# Função para processar o envio com barra de progresso
+def processar_envio(queue, resultados, mensagem_universal, progress_bar, total_numeros, progress_label):
+    enviados = 0
     while not queue.empty():
         numero = queue.get()
         if numero:
             resultado = enviar_mensagem_texto(numero, mensagem_universal)
             resultados.append(resultado)
+            enviados += 1
+            progress_bar["value"] = (enviados / total_numeros) * 100
+            progress_label.config(text=f"Progresso: {enviados}/{total_numeros}")
             time.sleep(0.5)  # Evitar sobrecarregar a API
         queue.task_done()
 
 # Função para iniciar o envio em uma thread separada
-def iniciar_envio_thread(caminho_planilha, caminho_mensagem):
+def iniciar_envio_thread(caminho_planilha, caminho_mensagem, progress_bar, progress_label):
     def envio():
         try:
             with open(caminho_mensagem, "r", encoding="utf-8") as file:
@@ -75,6 +78,7 @@ def iniciar_envio_thread(caminho_planilha, caminho_mensagem):
             df = pd.read_excel(caminho_planilha, usecols=["numero"])
             numeros = df["numero"].drop_duplicates().dropna().apply(lambda x: str(x).strip().rstrip(".0"))
 
+            total_numeros = len(numeros)
             queue = Queue()
             resultados = []
 
@@ -84,8 +88,8 @@ def iniciar_envio_thread(caminho_planilha, caminho_mensagem):
 
             # Cria threads para processar o envio
             threads = []
-            for _ in range(10):  # Número de threads (ajuste conforme necessário)
-                thread = threading.Thread(target=processar_envio_thread, args=(queue, resultados, mensagem_universal))
+            for _ in range(10):  # Número de threads
+                thread = threading.Thread(target=processar_envio, args=(queue, resultados, mensagem_universal, progress_bar, total_numeros, progress_label))
                 thread.start()
                 threads.append(thread)
 
@@ -99,6 +103,9 @@ def iniciar_envio_thread(caminho_planilha, caminho_mensagem):
             messagebox.showinfo("Concluído", "Mensagens enviadas com sucesso! Resultados salvos em 'resultados_envio.xlsx'.")
         except Exception as e:
             messagebox.showerror("Erro", f"Erro ao processar a planilha: {e}")
+        finally:
+            progress_bar["value"] = 100
+            progress_label.config(text="Progresso: Concluído!")
 
     # Cria uma thread para evitar bloqueio da interface
     envio_thread = threading.Thread(target=envio)
@@ -131,7 +138,7 @@ def iniciar_envio():
     if not caminho_planilha or not caminho_mensagem:
         messagebox.showwarning("Aviso", "Selecione todos os arquivos necessários!")
         return
-    iniciar_envio_thread(caminho_planilha, caminho_mensagem)
+    iniciar_envio_thread(caminho_planilha, caminho_mensagem, progress_bar, progress_label)
 
 # Criar interface gráfica
 janela = tk.Tk()
@@ -151,8 +158,14 @@ tk.Button(janela, text="Selecionar", command=selecionar_arquivo_entrada).grid(ro
 tk.Label(janela, text="Arquivo de Mensagem:").grid(row=2, column=0, padx=10, pady=5, sticky="w")
 tk.Entry(janela, textvariable=mensagem_var, width=50).grid(row=2, column=1, padx=10, pady=5)
 tk.Button(janela, text="Selecionar", command=selecionar_arquivo_mensagem).grid(row=2, column=2, padx=10, pady=5)
+#barra de progresso
+progress_label = tk.Label(janela, text="Progresso: 0/0")
+progress_label.grid(row=3, column=1, padx=10, pady=5)
+
+progress_bar = ttk.Progressbar(janela, orient="horizontal", length=400, mode="determinate")
+progress_bar.grid(row=4, column=1, padx=10, pady=5)
 
 # Botão de início
-tk.Button(janela, text="Iniciar Envio", command=iniciar_envio, bg="green", fg="white").grid(row=3, column=1, padx=10, pady=10)
+tk.Button(janela, text="Iniciar Envio", command=iniciar_envio, bg="green", fg="white").grid(row=5, column=1, padx=10, pady=10)
 
 janela.mainloop()
