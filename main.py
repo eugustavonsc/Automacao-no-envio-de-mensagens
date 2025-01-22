@@ -1,22 +1,3 @@
-"""
-==================================================
-    Envio de Mensagens Automático
-    Criado por: Gustavo Nascimento (GN)
-    Versão: 1.0
-==================================================
-Copyright (C) [2025], Gustavo Nascimento
-Todos os direitos reservados.
-
-Este software é distribuído sob a licença MIT.
-Para mais detalhes, consulte o arquivo LICENSE no diretório
-do projeto ou visite: https://opensource.org/licenses/MIT
-
-Este software foi desenvolvido para facilitar o envio de mensagens
-em massa de forma eficiente e organizada. O uso deste programa está
-sujeito aos termos da licença acima mencionada.
-==================================================
-"""
-
 import tkinter as tk
 from tkinter import filedialog, messagebox
 import pandas as pd
@@ -27,7 +8,6 @@ import os
 import time
 import threading
 from queue import Queue
-import re
 
 # Variável para armazenar o caminho do config.env
 config_env_path = None
@@ -85,47 +65,44 @@ def processar_envio_thread(queue, resultados, mensagem_universal):
             time.sleep(0.5)  # Evitar sobrecarregar a API
         queue.task_done()
 
-# Função para padronizar os números
-def padronizar_numero(numero):
-    numero = re.sub(r"[^\d]", "", numero)  # Remove caracteres não numéricos
-    if len(numero) >= 10:  # Verifica se tem ao menos 10 dígitos (DDD + número)
-        return f"55{numero}"  # Adiciona o código do Brasil
-    return None
+# Função para iniciar o envio em uma thread separada
+def iniciar_envio_thread(caminho_planilha, caminho_mensagem):
+    def envio():
+        try:
+            with open(caminho_mensagem, "r", encoding="utf-8") as file:
+                mensagem_universal = file.read().strip()
 
-# Processa a planilha e envia mensagens
-def processar_planilha(caminho_planilha, caminho_mensagem):
-    try:
-        with open(caminho_mensagem, "r", encoding="utf-8") as file:
-            mensagem_universal = file.read().strip()
+            df = pd.read_excel(caminho_planilha, usecols=["numero"])
+            numeros = df["numero"].drop_duplicates().dropna().apply(lambda x: str(x).strip().rstrip(".0"))
 
-        df = pd.read_excel(caminho_planilha, usecols=["numero"])
-        numeros = df["numero"].drop_duplicates().dropna()
-        numeros_padronizados = numeros.apply(padronizar_numero).dropna()
+            queue = Queue()
+            resultados = []
 
-        queue = Queue()
-        resultados = []
+            # Adiciona os números à fila
+            for numero in numeros:
+                queue.put(numero)
 
-        # Adiciona os números à fila
-        for numero in numeros_padronizados:
-            queue.put(numero)
+            # Cria threads para processar o envio
+            threads = []
+            for _ in range(10):  # Número de threads (ajuste conforme necessário)
+                thread = threading.Thread(target=processar_envio_thread, args=(queue, resultados, mensagem_universal))
+                thread.start()
+                threads.append(thread)
 
-        # Cria threads para processar o envio
-        threads = []
-        for _ in range(10):  # Número de threads 
-            thread = threading.Thread(target=processar_envio_thread, args=(queue, resultados, mensagem_universal))
-            thread.start()
-            threads.append(thread)
+            # Aguarda todas as threads terminarem
+            for thread in threads:
+                thread.join()
 
-        # Aguarda todas as threads terminarem
-        for thread in threads:
-            thread.join()
+            # Salva os resultados no arquivo Excel
+            resultados_df = pd.DataFrame(resultados)
+            resultados_df.to_excel("resultados_envio.xlsx", index=False)
+            messagebox.showinfo("Concluído", "Mensagens enviadas com sucesso! Resultados salvos em 'resultados_envio.xlsx'.")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao processar a planilha: {e}")
 
-        # Salva os resultados no arquivo Excel
-        resultados_df = pd.DataFrame(resultados)
-        resultados_df.to_excel("resultados_envio.xlsx", index=False)
-        messagebox.showinfo("Concluído", "Mensagens enviadas com sucesso! Resultados salvos em 'resultados_envio.xlsx'.")
-    except Exception as e:
-        messagebox.showerror("Erro", f"Erro ao processar a planilha: {e}")
+    # Cria uma thread para evitar bloqueio da interface
+    envio_thread = threading.Thread(target=envio)
+    envio_thread.start()
 
 # Selecionar o arquivo config.env
 def selecionar_config_env():
@@ -154,22 +131,7 @@ def iniciar_envio():
     if not caminho_planilha or not caminho_mensagem:
         messagebox.showwarning("Aviso", "Selecione todos os arquivos necessários!")
         return
-    processar_planilha(caminho_planilha, caminho_mensagem)
-
-def exibir_sobre():
-    mensagem = (
-        "==================================================\n"
-        "    Envio de Mensagens Automático\n"
-        "    Criado por: Gustavo Nascimento (GN)\n"
-        "    Versão: 1.0\n"
-        "==================================================\n"
-        "Copyright (C) [2025], Gustavo Nascimento\n"
-        "Todos os direitos reservados.\n\n"
-        "Este software é distribuído sob a licença MIT.\n"
-        "Para mais detalhes, consulte o arquivo LICENSE no diretório\n"
-        "do projeto ou visite: https://opensource.org/licenses/MIT\n"
-    )
-    messagebox.showinfo("Sobre", mensagem)
+    iniciar_envio_thread(caminho_planilha, caminho_mensagem)
 
 # Criar interface gráfica
 janela = tk.Tk()
@@ -192,8 +154,5 @@ tk.Button(janela, text="Selecionar", command=selecionar_arquivo_mensagem).grid(r
 
 # Botão de início
 tk.Button(janela, text="Iniciar Envio", command=iniciar_envio, bg="green", fg="white").grid(row=3, column=1, padx=10, pady=10)
-
-# Botão "Sobre"
-tk.Button(janela, text="Sobre", command=exibir_sobre, bg="gray", fg="white").grid(row=4, column=1, padx=10, pady=10)
 
 janela.mainloop()
