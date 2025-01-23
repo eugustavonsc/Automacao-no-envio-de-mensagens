@@ -1,24 +1,5 @@
-"""
-==================================================
-    Envio de Mensagens Automático
-    Criado por: Gustavo Nascimento (GN)
-    Versão: 1.0
-==================================================
-Copyright (C) [2025], Gustavo Nascimento
-Todos os direitos reservados.
-
-Este software é distribuído sob a licença MIT.
-Para mais detalhes, consulte o arquivo LICENSE no diretório
-do projeto ou visite: https://opensource.org/licenses/MIT
-
-Este software foi desenvolvido para facilitar o envio de mensagens
-em massa de forma eficiente e organizada. O uso deste programa está
-sujeito aos termos da licença acima mencionada.
-==================================================
-"""
-
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 import pandas as pd
 import requests
 from dotenv import load_dotenv
@@ -29,27 +10,50 @@ import threading
 from queue import Queue
 import re
 
-# Variável para armazenar o caminho do config.env
+# Variável global para armazenar o caminho do arquivo config.env
 config_env_path = None
 
-# Função para carregar as variáveis de ambiente
 def carregar_config_env(caminho_config):
+    """
+    Carrega o arquivo config.env e valida as variáveis de ambiente.
+    """
     global config_env_path
     config_env_path = Path(caminho_config)
+
     if not config_env_path.is_file():
         messagebox.showerror("Erro", "Arquivo config.env não encontrado!")
         return False
 
-    load_dotenv(config_env_path)
-    return True
+    load_dotenv(dotenv_path=config_env_path)
 
-# Função para enviar mensagem
-def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=22):
     api_url = os.getenv("API_URL")
     api_token = os.getenv("API_TOKEN")
-    
     if not api_url or not api_token:
-        raise ValueError("API_URL ou API_TOKEN não estão definidos no config.env.")
+        messagebox.showerror(
+            "Erro",
+            "Variáveis API_URL ou API_TOKEN não foram carregadas do config.env. Verifique o arquivo."
+        )
+        return False
+
+    messagebox.showinfo("Sucesso", "Arquivo config.env carregado com sucesso!")
+    return True
+
+def selecionar_config_env():
+    """
+    Seleciona o arquivo config.env via diálogo e tenta carregá-lo.
+    """
+    caminho = filedialog.askopenfilename(filetypes=[("Arquivos ENV", "*.env")])
+    if caminho:
+        sucesso = carregar_config_env(caminho)
+        if not sucesso:
+            messagebox.showerror("Erro", "Erro ao carregar o arquivo config.env.")
+
+def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=22):
+    """
+    Envia uma mensagem para o número especificado usando a API.
+    """
+    api_url = os.getenv("API_URL")
+    api_token = os.getenv("API_TOKEN")
     
     headers = {
         "Authorization": f"Bearer {api_token}",
@@ -75,25 +79,32 @@ def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=22):
     except Exception as e:
         return {"nome": "N/A", "numero": numero, "status": f"Erro: {e}"}
 
-# Função que executa o envio em threads
-def processar_envio_thread(queue, resultados, mensagem_universal):
+def processar_envio_thread(queue, resultados, mensagem_universal, progress_bar, total_numeros):
+    """
+    Processa o envio das mensagens em uma thread separada.
+    """
     while not queue.empty():
         numero = queue.get()
         if numero:
             resultado = enviar_mensagem_texto(numero, mensagem_universal)
             resultados.append(resultado)
             time.sleep(0.5)  # Evitar sobrecarregar a API
+            progress_bar.step(100 / total_numeros)  # Atualiza a barra de progresso
         queue.task_done()
 
-# Função para padronizar os números
 def padronizar_numero(numero):
-    numero = re.sub(r"[^\d]", "", numero)  # Remove caracteres não numéricos
-    if len(numero) >= 10:  # Verifica se tem ao menos 10 dígitos (DDD + número)
-        return f"55{numero}"  # Adiciona o código do Brasil
+    """
+    Padroniza o número, removendo caracteres inválidos e adicionando o código do Brasil.
+    """
+    numero = re.sub(r"[^\d]", "", numero)
+    if len(numero) >= 10:
+        return f"55{numero}"
     return None
 
-# Processa a planilha e envia mensagens
-def processar_planilha(caminho_planilha, caminho_mensagem):
+def processar_planilha(caminho_planilha, caminho_mensagem, progress_bar):
+    """
+    Processa a planilha de números e envia as mensagens.
+    """
     try:
         with open(caminho_mensagem, "r", encoding="utf-8") as file:
             mensagem_universal = file.read().strip()
@@ -104,38 +115,31 @@ def processar_planilha(caminho_planilha, caminho_mensagem):
 
         queue = Queue()
         resultados = []
+        total_numeros = len(numeros_padronizados)
 
-        # Adiciona os números à fila
         for numero in numeros_padronizados:
             queue.put(numero)
 
-        # Cria threads para processar o envio
+        progress_bar["maximum"] = 100  # Define o máximo da barra como 100%
+
         threads = []
-        for _ in range(10):  # Número de threads 
-            thread = threading.Thread(target=processar_envio_thread, args=(queue, resultados, mensagem_universal))
+        for _ in range(10):  # Número de threads
+            thread = threading.Thread(
+                target=processar_envio_thread,
+                args=(queue, resultados, mensagem_universal, progress_bar, total_numeros)
+            )
             thread.start()
             threads.append(thread)
 
-        # Aguarda todas as threads terminarem
         for thread in threads:
             thread.join()
 
-        # Salva os resultados no arquivo Excel
         resultados_df = pd.DataFrame(resultados)
         resultados_df.to_excel("resultados_envio.xlsx", index=False)
         messagebox.showinfo("Concluído", "Mensagens enviadas com sucesso! Resultados salvos em 'resultados_envio.xlsx'.")
     except Exception as e:
         messagebox.showerror("Erro", f"Erro ao processar a planilha: {e}")
 
-# Selecionar o arquivo config.env
-def selecionar_config_env():
-    caminho = filedialog.askopenfilename(filetypes=[("Arquivos ENV", "*.env")])
-    if caminho:
-        sucesso = carregar_config_env(caminho)
-        if sucesso:
-            messagebox.showinfo("Configuração", "Config.env carregado com sucesso!")
-
-# Selecionar outros arquivos
 def selecionar_arquivo_entrada():
     caminho = filedialog.askopenfilename(filetypes=[("Arquivos Excel", "*.xlsx")])
     entrada_var.set(caminho)
@@ -154,7 +158,9 @@ def iniciar_envio():
     if not caminho_planilha or not caminho_mensagem:
         messagebox.showwarning("Aviso", "Selecione todos os arquivos necessários!")
         return
-    processar_planilha(caminho_planilha, caminho_mensagem)
+
+    progress_bar["value"] = 0
+    threading.Thread(target=processar_planilha, args=(caminho_planilha, caminho_mensagem, progress_bar)).start()
 
 def exibir_sobre():
     mensagem = (
@@ -190,10 +196,14 @@ tk.Label(janela, text="Arquivo de Mensagem:").grid(row=2, column=0, padx=10, pad
 tk.Entry(janela, textvariable=mensagem_var, width=50).grid(row=2, column=1, padx=10, pady=5)
 tk.Button(janela, text="Selecionar", command=selecionar_arquivo_mensagem).grid(row=2, column=2, padx=10, pady=5)
 
+# Barra de progresso
+progress_bar = ttk.Progressbar(janela, orient="horizontal", mode="determinate", length=400)
+progress_bar.grid(row=3, column=1, pady=10)
+
 # Botão de início
-tk.Button(janela, text="Iniciar Envio", command=iniciar_envio, bg="green", fg="white").grid(row=3, column=1, padx=10, pady=10)
+tk.Button(janela, text="Iniciar Envio", command=iniciar_envio, bg="green", fg="white").grid(row=4, column=1, padx=10, pady=10)
 
 # Botão "Sobre"
-tk.Button(janela, text="Sobre", command=exibir_sobre, bg="gray", fg="white").grid(row=4, column=1, padx=10, pady=10)
+tk.Button(janela, text="Sobre", command=exibir_sobre, bg="gray", fg="white").grid(row=5, column=1, padx=10, pady=10)
 
 janela.mainloop()
