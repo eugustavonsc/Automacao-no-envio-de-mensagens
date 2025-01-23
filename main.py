@@ -1,5 +1,24 @@
+"""
+==================================================
+    Envio de Mensagens Automático
+    Criado por: Gustavo Nascimento (GN)
+    Versão: 1.0
+==================================================
+Copyright (C) [2025], Gustavo Nascimento
+Todos os direitos reservados.
+
+Este software é distribuído sob a licença MIT.
+Para mais detalhes, consulte o arquivo LICENSE no diretório
+do projeto ou visite: https://opensource.org/licenses/MIT
+
+Este software foi desenvolvido para facilitar o envio de mensagens
+em massa de forma eficiente e organizada. O uso deste programa está
+sujeito aos termos da licença acima mencionada.
+==================================================
+"""
+
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox
 import pandas as pd
 import requests
 from dotenv import load_dotenv
@@ -8,6 +27,7 @@ import os
 import time
 import threading
 from queue import Queue
+import re
 
 # Variável para armazenar o caminho do config.env
 config_env_path = None
@@ -48,68 +68,64 @@ def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=22):
         if response.status_code == 200:
             response_data = response.json()
             nome = response_data.get("ticket", {}).get("contact", {}).get("name", "Desconhecido")
-            return {"nome": nome, "numero": numero, "status": "Sucesso"}
+            status_envio = response_data.get("mensagem", "Mensagem enviada")
+            return {"nome": nome, "numero": numero, "status": status_envio}
         else:
             return {"nome": "N/A", "numero": numero, "status": f"Erro {response.status_code}: {response.text}"}
     except Exception as e:
         return {"nome": "N/A", "numero": numero, "status": f"Erro: {e}"}
 
-# Função para processar o envio com barra de progresso
-def processar_envio(queue, resultados, mensagem_universal, progress_bar, total_numeros, progress_label):
-    enviados = 0
+# Função que executa o envio em threads
+def processar_envio_thread(queue, resultados, mensagem_universal):
     while not queue.empty():
         numero = queue.get()
         if numero:
             resultado = enviar_mensagem_texto(numero, mensagem_universal)
             resultados.append(resultado)
-            enviados += 1
-            progress_bar["value"] = (enviados / total_numeros) * 100
-            progress_label.config(text=f"Progresso: {enviados}/{total_numeros}")
             time.sleep(0.5)  # Evitar sobrecarregar a API
         queue.task_done()
 
-# Função para iniciar o envio em uma thread separada
-def iniciar_envio_thread(caminho_planilha, caminho_mensagem, progress_bar, progress_label):
-    def envio():
-        try:
-            with open(caminho_mensagem, "r", encoding="utf-8") as file:
-                mensagem_universal = file.read().strip()
+# Função para padronizar os números
+def padronizar_numero(numero):
+    numero = re.sub(r"[^\d]", "", numero)  # Remove caracteres não numéricos
+    if len(numero) >= 10:  # Verifica se tem ao menos 10 dígitos (DDD + número)
+        return f"55{numero}"  # Adiciona o código do Brasil
+    return None
 
-            df = pd.read_excel(caminho_planilha, usecols=["numero"])
-            numeros = df["numero"].drop_duplicates().dropna().apply(lambda x: str(x).strip().rstrip(".0"))
+# Processa a planilha e envia mensagens
+def processar_planilha(caminho_planilha, caminho_mensagem):
+    try:
+        with open(caminho_mensagem, "r", encoding="utf-8") as file:
+            mensagem_universal = file.read().strip()
 
-            total_numeros = len(numeros)
-            queue = Queue()
-            resultados = []
+        df = pd.read_excel(caminho_planilha, usecols=["numero"])
+        numeros = df["numero"].drop_duplicates().dropna()
+        numeros_padronizados = numeros.apply(padronizar_numero).dropna()
 
-            # Adiciona os números à fila
-            for numero in numeros:
-                queue.put(numero)
+        queue = Queue()
+        resultados = []
 
-            # Cria threads para processar o envio
-            threads = []
-            for _ in range(10):  # Número de threads
-                thread = threading.Thread(target=processar_envio, args=(queue, resultados, mensagem_universal, progress_bar, total_numeros, progress_label))
-                thread.start()
-                threads.append(thread)
+        # Adiciona os números à fila
+        for numero in numeros_padronizados:
+            queue.put(numero)
 
-            # Aguarda todas as threads terminarem
-            for thread in threads:
-                thread.join()
+        # Cria threads para processar o envio
+        threads = []
+        for _ in range(10):  # Número de threads 
+            thread = threading.Thread(target=processar_envio_thread, args=(queue, resultados, mensagem_universal))
+            thread.start()
+            threads.append(thread)
 
-            # Salva os resultados no arquivo Excel
-            resultados_df = pd.DataFrame(resultados)
-            resultados_df.to_excel("resultados_envio.xlsx", index=False)
-            messagebox.showinfo("Concluído", "Mensagens enviadas com sucesso! Resultados salvos em 'resultados_envio.xlsx'.")
-        except Exception as e:
-            messagebox.showerror("Erro", f"Erro ao processar a planilha: {e}")
-        finally:
-            progress_bar["value"] = 100
-            progress_label.config(text="Progresso: Concluído!")
+        # Aguarda todas as threads terminarem
+        for thread in threads:
+            thread.join()
 
-    # Cria uma thread para evitar bloqueio da interface
-    envio_thread = threading.Thread(target=envio)
-    envio_thread.start()
+        # Salva os resultados no arquivo Excel
+        resultados_df = pd.DataFrame(resultados)
+        resultados_df.to_excel("resultados_envio.xlsx", index=False)
+        messagebox.showinfo("Concluído", "Mensagens enviadas com sucesso! Resultados salvos em 'resultados_envio.xlsx'.")
+    except Exception as e:
+        messagebox.showerror("Erro", f"Erro ao processar a planilha: {e}")
 
 # Selecionar o arquivo config.env
 def selecionar_config_env():
@@ -138,7 +154,22 @@ def iniciar_envio():
     if not caminho_planilha or not caminho_mensagem:
         messagebox.showwarning("Aviso", "Selecione todos os arquivos necessários!")
         return
-    iniciar_envio_thread(caminho_planilha, caminho_mensagem, progress_bar, progress_label)
+    processar_planilha(caminho_planilha, caminho_mensagem)
+
+def exibir_sobre():
+    mensagem = (
+        "==================================================\n"
+        "    Envio de Mensagens Automático\n"
+        "    Criado por: Gustavo Nascimento (GN)\n"
+        "    Versão: 1.0\n"
+        "==================================================\n"
+        "Copyright (C) [2025], Gustavo Nascimento\n"
+        "Todos os direitos reservados.\n\n"
+        "Este software é distribuído sob a licença MIT.\n"
+        "Para mais detalhes, consulte o arquivo LICENSE no diretório\n"
+        "do projeto ou visite: https://opensource.org/licenses/MIT\n"
+    )
+    messagebox.showinfo("Sobre", mensagem)
 
 # Criar interface gráfica
 janela = tk.Tk()
@@ -158,14 +189,11 @@ tk.Button(janela, text="Selecionar", command=selecionar_arquivo_entrada).grid(ro
 tk.Label(janela, text="Arquivo de Mensagem:").grid(row=2, column=0, padx=10, pady=5, sticky="w")
 tk.Entry(janela, textvariable=mensagem_var, width=50).grid(row=2, column=1, padx=10, pady=5)
 tk.Button(janela, text="Selecionar", command=selecionar_arquivo_mensagem).grid(row=2, column=2, padx=10, pady=5)
-#barra de progresso
-progress_label = tk.Label(janela, text="Progresso: 0/0")
-progress_label.grid(row=3, column=1, padx=10, pady=5)
-
-progress_bar = ttk.Progressbar(janela, orient="horizontal", length=400, mode="determinate")
-progress_bar.grid(row=4, column=1, padx=10, pady=5)
 
 # Botão de início
-tk.Button(janela, text="Iniciar Envio", command=iniciar_envio, bg="green", fg="white").grid(row=5, column=1, padx=10, pady=10)
+tk.Button(janela, text="Iniciar Envio", command=iniciar_envio, bg="green", fg="white").grid(row=3, column=1, padx=10, pady=10)
+
+# Botão "Sobre"
+tk.Button(janela, text="Sobre", command=exibir_sobre, bg="gray", fg="white").grid(row=4, column=1, padx=10, pady=10)
 
 janela.mainloop()

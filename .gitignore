@@ -2,3 +2,4 @@ config.env
 mensagem.txt
 venv
 *xlsx
+*txt
