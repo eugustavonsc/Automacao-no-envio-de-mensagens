@@ -90,6 +90,7 @@ def processar_envio_thread(queue, resultados, mensagem_universal, progress_bar, 
             resultados.append(resultado)
             time.sleep(0.5)  # Evitar sobrecarregar a API
             progress_bar.step(100 / total_numeros)  # Atualiza a barra de progresso
+            progress_bar.update_idletasks()  # Atualiza a UI sem bloqueá-la
         queue.task_done()
 
 def padronizar_numero(numero):
