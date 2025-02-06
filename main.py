@@ -48,7 +48,7 @@ def selecionar_config_env():
         if not sucesso:
             messagebox.showerror("Erro", "Erro ao carregar o arquivo config.env.")
 
-def enviar_mensagem_texto(numero, mensagem, abrir_ticket=0, id_fila=0):
+def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=47):
     """
     Envia uma mensagem para o número especificado usando a API.
     """
@@ -69,15 +69,24 @@ def enviar_mensagem_texto(numero, mensagem, abrir_ticket=0, id_fila=0):
 
     try:
         response = requests.post(api_url, headers=headers, json=payload)
+        
         if response.status_code == 200:
-            response_data = response.json()
-            nome = response_data.get("ticket", {}).get("contact", {}).get("name", "Desconhecido")
-            status_envio = response_data.get("mensagem", "Mensagem enviada")
-            return {"nome": nome, "numero": numero, "status": status_envio}
+            try:
+                response_data = response.json()
+                if not isinstance(response_data, dict):
+                    return {"nome": "N/A", "numero": numero, "status": "Erro: Resposta inesperada da API"}
+                
+                nome = response_data.get("ticket", {}).get("contact", {}).get("name", "Desconhecido")
+                status_envio = response_data.get("mensagem", "Mensagem enviada")
+                return {"nome": nome, "numero": numero, "status": status_envio}
+            except ValueError:
+                return {"nome": "N/A", "numero": numero, "status": "Erro: Resposta inválida da API"}
         else:
             return {"nome": "N/A", "numero": numero, "status": f"Erro {response.status_code}: {response.text}"}
+    except requests.RequestException as e:
+        return {"nome": "N/A", "numero": numero, "status": f"Erro de requisição: {e}"}
     except Exception as e:
-        return {"nome": "N/A", "numero": numero, "status": f"Erro: {e}"}
+        return {"nome": "N/A", "numero": numero, "status": f"Erro inesperado: {e}"}
 
 def processar_envio_thread(queue, resultados, mensagem_universal, progress_bar, total_numeros):
     """
