@@ -48,7 +48,7 @@ def selecionar_config_env():
         if not sucesso:
             messagebox.showerror("Erro", "Erro ao carregar o arquivo config.env.")
 
-def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=47):
+def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=203):
     """
     Envia uma mensagem para o número especificado usando a API.
     """
