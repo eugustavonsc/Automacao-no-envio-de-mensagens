@@ -1,3 +1,5 @@
+# Automação no Envio de Mensagens © 2025 by Gustavo Nascimento  
+# Licenciado sob CC BY-NC-ND 4.0. Para detalhes, visite https://creativecommons.org/licenses/by-nc-nd/4.0/
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import pandas as pd
@@ -240,9 +242,10 @@ def exibir_sobre():
         "==================================================\n"
         "Copyright (C) [2025], Gustavo Nascimento\n"
         "Todos os direitos reservados.\n\n"
-        "Este software é distribuído sob a licença MIT.\n"
-        "Para mais detalhes, consulte o arquivo LICENSE no diretório\n"
-        "do projeto ou visite: https://opensource.org/licenses/MIT\n"
+        "Este projeto está licenciado sob a [Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International](LICENSE).\n"
+        "Você pode compartilhá-lo, mas **não pode**: \n"
+        "- Usar para fins comerciais. \n"
+        "-Modificar ou criar obras derivadas. \n"
     )
     messagebox.showinfo("Sobre", mensagem)
 

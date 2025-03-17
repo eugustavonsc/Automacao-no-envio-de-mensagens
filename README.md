@@ -14,10 +14,9 @@ Este script automatiza o processamento de dados de clientes a partir de um arqui
 
 1. Coloque o arquivo `clientes.xlsx` no mesmo diretório do script.
 2. Configure o arquivo `config.env` com as variáveis de ambiente necessárias, incluindo a API.
-3. Execute o executável para processar os dados e gerar os relatórios.
-2. Configure o arquivo `config.env` com as variáveis de ambiente necessárias.
 3. Execute o script para processar os dados e gerar os relatórios.
 4. Utilize a interface gráfica para seleção de arquivos e envio de mensagens.
+5. Um executável também está disponível para facilitar a execução sem a necessidade de um ambiente Python configurado.
 
 ## Requisitos
 
@@ -25,5 +24,7 @@ Este script automatiza o processamento de dados de clientes a partir de um arqui
 - Bibliotecas: pandas, openpyxl, tkinter
 
 ## Licença
-
-Este projeto está licenciado sob a licença MIT.
+Este projeto está licenciado sob a [Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International](LICENSE).  
+Você pode compartilhá-lo, mas **não pode**:
+- Usar para fins comerciais.
+- Modificar ou criar obras derivadas.
