@@ -9,6 +9,7 @@ import time
 import threading
 from queue import Queue
 import re
+from mimetypes import guess_type
 
 # Variável global para armazenar o caminho do arquivo config.env
 config_env_path = None
@@ -44,6 +45,13 @@ def selecionar_config_env():
         sucesso = carregar_config_env(caminho)
         if not sucesso:
             messagebox.showerror("Erro", "Erro ao carregar o arquivo config.env.")
+
+def detectar_tipo_mime(caminho_arquivo):
+    """
+    Detecta o tipo MIME de um arquivo com base na extensão.
+    """
+    tipo_mime, _ = guess_type(caminho_arquivo)
+    return tipo_mime or "application/octet-stream" 
 
 # ==================================================
 # Funções de Envio de Mensagens
@@ -97,6 +105,9 @@ def enviar_mensagem_midia(numero, mensagem, caminho_arquivo, abrir_ticket=1, id_
 
     try:
         with open(caminho_arquivo, "rb") as arquivo:
+            # Detecta o tipo MIME automaticamente
+            tipo_mime = detectar_tipo_mime(caminho_arquivo)
+            
             data = {
                 "number": numero,
                 "openTicket": str(abrir_ticket),
@@ -108,7 +119,7 @@ def enviar_mensagem_midia(numero, mensagem, caminho_arquivo, abrir_ticket=1, id_
                 "medias": (
                     os.path.basename(caminho_arquivo),
                     arquivo,
-                    "image/jpeg"
+                    tipo_mime  # Tipo MIME dinâmico
                 )
             }
 
@@ -128,7 +139,6 @@ def enviar_mensagem_midia(numero, mensagem, caminho_arquivo, abrir_ticket=1, id_
                 return {"nome": "N/A", "numero": numero, "status": f"Erro {response.status_code}: {response.text}"}
     except Exception as e:
         return {"nome": "N/A", "numero": numero, "status": f"Erro inesperado: {e}"}
-
 # ==================================================
 # Funções de Processamento
 # ==================================================
@@ -141,7 +151,7 @@ def processar_envio_thread(queue, resultados, mensagem_universal, progress_bar, 
             else:
                 resultado = enviar_mensagem_texto(numero, mensagem_universal)
             resultados.append(resultado)
-            time.sleep(0.5)
+            time.sleep(0.5) # Simula um atraso de 0.5 segundos por requisição
             progress_bar.step(100 / total_numeros)
             progress_bar.update_idletasks()
         queue.task_done()
