@@ -58,7 +58,7 @@ def detectar_tipo_mime(caminho_arquivo):
 # ==================================================
 # Funções de Envio de Mensagens
 # ==================================================
-def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=203):
+def enviar_mensagem_texto(numero, mensagem, abrir_ticket=0, ):  # Alterado para não abrir ticket
     api_url = os.getenv("API_URL")
     api_token = os.getenv("API_TOKEN")
     
@@ -70,7 +70,6 @@ def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=203):
     payload = {
         "number": numero,
         "openTicket": str(abrir_ticket),
-        "queueId": str(id_fila),
         "body": mensagem
     }
 
@@ -80,22 +79,17 @@ def enviar_mensagem_texto(numero, mensagem, abrir_ticket=1, id_fila=203):
         if response.status_code == 200:
             try:
                 response_data = response.json()
-                if not isinstance(response_data, dict):
-                    return {"nome": "N/A", "numero": numero, "status": "Erro: Resposta inesperada da API"}
-                
-                nome = response_data.get("ticket", {}).get("contact", {}).get("name", "Desconhecido")
-                status_envio = response_data.get("mensagem", "Mensagem enviada")
-                return {"nome": nome, "numero": numero, "status": status_envio}
+                return {"status": "Enviado", "detalhes": "Mensagem enviada com sucesso"}
             except ValueError:
-                return {"nome": "N/A", "numero": numero, "status": "Erro: Resposta inválida da API"}
+                return {"status": "Erro", "detalhes": "Resposta inválida da API"}
         else:
-            return {"nome": "N/A", "numero": numero, "status": f"Erro {response.status_code}: {response.text}"}
+            return {"status": "Erro", "detalhes": f"Erro {response.status_code}: {response.text}"}
     except requests.RequestException as e:
-        return {"nome": "N/A", "numero": numero, "status": f"Erro de requisição: {e}"}
+        return {"status": "Erro", "detalhes": f"Erro de requisição: {e}"}
     except Exception as e:
-        return {"nome": "N/A", "numero": numero, "status": f"Erro inesperado: {e}"}
+        return {"status": "Erro", "detalhes": f"Erro inesperado: {e}"}
 
-def enviar_mensagem_midia(numero, mensagem, caminho_arquivo, abrir_ticket=1, id_fila=203):
+def enviar_mensagem_midia(numero, mensagem, caminho_arquivo, abrir_ticket=0, id_fila=0):  # Alterado para não abrir ticket
     api_url = os.getenv("API_URL")
     api_token = os.getenv("API_TOKEN")
     
@@ -107,7 +101,6 @@ def enviar_mensagem_midia(numero, mensagem, caminho_arquivo, abrir_ticket=1, id_
 
     try:
         with open(caminho_arquivo, "rb") as arquivo:
-            # Detecta o tipo MIME automaticamente
             tipo_mime = detectar_tipo_mime(caminho_arquivo)
             
             data = {
@@ -121,45 +114,44 @@ def enviar_mensagem_midia(numero, mensagem, caminho_arquivo, abrir_ticket=1, id_
                 "medias": (
                     os.path.basename(caminho_arquivo),
                     arquivo,
-                    tipo_mime  # Tipo MIME dinâmico
+                    tipo_mime
                 )
             }
 
             response = requests.post(api_url, headers=headers, data=data, files=files)
             
             if response.status_code == 200:
-                try:
-                    response_data = response.json()
-                    return {
-                        "nome": response_data.get("ticket", {}).get("contact", {}).get("name", "Desconhecido"),
-                        "numero": numero,
-                        "status": response_data.get("mensagem", "Mensagem enviada")
-                    }
-                except ValueError:
-                    return {"nome": "N/A", "numero": numero, "status": "Erro: Resposta inválida da API"}
+                return {"status": "Enviado", "detalhes": "Mensagem com mídia enviada com sucesso"}
             else:
-                return {"nome": "N/A", "numero": numero, "status": f"Erro {response.status_code}: {response.text}"}
+                return {"status": "Erro", "detalhes": f"Erro {response.status_code}: {response.text}"}
     except Exception as e:
-        return {"nome": "N/A", "numero": numero, "status": f"Erro inesperado: {e}"}
+        return {"status": "Erro", "detalhes": f"Erro inesperado: {e}"}
+
 # ==================================================
 # Funções de Processamento
 # ==================================================
-def processar_envio_thread(queue, resultados, mensagem_universal, progress_bar, total_numeros, envia_midia, caminho_imagem):
+def processar_envio_thread(queue, df, mensagem_universal, progress_bar, total_numeros, envia_midia, caminho_imagem):
     while not queue.empty():
-        numero = queue.get()
+        index, row = queue.get()
+        numero = padronizar_numero(row['numero'])
+        
         if numero:
             if envia_midia and caminho_imagem.strip():
                 resultado = enviar_mensagem_midia(numero, mensagem_universal, caminho_imagem)
             else:
                 resultado = enviar_mensagem_texto(numero, mensagem_universal)
-            resultados.append(resultado)
-            time.sleep(0.5) # Simula um atraso de 0.5 segundos por requisição
+            
+            # Atualiza a planilha diretamente
+            df.at[index, 'status_envio'] = resultado['status']
+            df.at[index, 'detalhes_envio'] = resultado['detalhes']
+            
+            time.sleep(0.5)
             progress_bar.step(100 / total_numeros)
             progress_bar.update_idletasks()
         queue.task_done()
 
 def padronizar_numero(numero):
-    numero = re.sub(r"[^\d]", "", numero)
+    numero = re.sub(r"[^\d]", "", str(numero))
     if len(numero) >= 10:
         return f"55{numero}"
     return None
@@ -171,24 +163,30 @@ def processar_planilha(caminho_planilha, caminho_mensagem, caminho_imagem, progr
 
         envia_midia = bool(caminho_imagem.strip()) if caminho_imagem else False
 
-        df = pd.read_excel(caminho_planilha, usecols=["numero"])
-        numeros = df["numero"].drop_duplicates().dropna()
-        numeros_padronizados = numeros.apply(padronizar_numero).dropna()
+        # Carrega a planilha mantendo todos os dados originais
+        df = pd.read_excel(caminho_planilha)
+        
+        # Verifica se as colunas de status já existem, se não, cria
+        if 'status_envio' not in df.columns:
+            df['status_envio'] = ''
+        if 'detalhes_envio' not in df.columns:
+            df['detalhes_envio'] = ''
+        
+        # Filtra números válidos
+        numeros_validos = df[df['numero'].notna()]
+        total_numeros = len(numeros_validos)
 
         queue = Queue()
-        resultados = []
-        total_numeros = len(numeros_padronizados)
-
-        for numero in numeros_padronizados:
-            queue.put(numero)
+        for index, row in numeros_validos.iterrows():
+            queue.put((index, row))
 
         progress_bar["maximum"] = 100
 
         threads = []
-        for _ in range(10):
+        for _ in range(10):  # Número de threads
             thread = threading.Thread(
                 target=processar_envio_thread,
-                args=(queue, resultados, mensagem_universal, progress_bar, total_numeros, envia_midia, caminho_imagem)
+                args=(queue, df, mensagem_universal, progress_bar, total_numeros, envia_midia, caminho_imagem)
             )
             thread.start()
             threads.append(thread)
@@ -196,14 +194,14 @@ def processar_planilha(caminho_planilha, caminho_mensagem, caminho_imagem, progr
         for thread in threads:
             thread.join()
 
-        resultados_df = pd.DataFrame(resultados)
-        resultados_df.to_excel("resultados_envio.xlsx", index=False)
-        messagebox.showinfo("Concluído", "Mensagens enviadas com sucesso! Resultados salvos em 'resultados_envio.xlsx'.")
+        # Salva a planilha original com as novas colunas
+        df.to_excel(caminho_planilha, index=False)
+        messagebox.showinfo("Concluído", f"Processo finalizado! Planilha atualizada em: {caminho_planilha}")
     except Exception as e:
         messagebox.showerror("Erro", f"Erro ao processar a planilha: {e}")
 
 # ==================================================
-# Funções de Interface
+# Funções de Interface (mantidas iguais)
 # ==================================================
 def selecionar_arquivo_entrada():
     caminho = filedialog.askopenfilename(filetypes=[("Arquivos Excel", "*.xlsx")])
@@ -231,7 +229,10 @@ def iniciar_envio():
         return
 
     progress_bar["value"] = 0
-    threading.Thread(target=processar_planilha, args=(caminho_planilha, caminho_mensagem, caminho_imagem, progress_bar)).start()
+    threading.Thread(
+        target=processar_planilha, 
+        args=(caminho_planilha, caminho_mensagem, caminho_imagem, progress_bar)
+    ).start()
 
 def exibir_sobre():
     mensagem = (
@@ -245,7 +246,7 @@ def exibir_sobre():
         "Este projeto está licenciado sob a [Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International](LICENSE).\n"
         "Você pode compartilhá-lo, mas **não pode**: \n"
         "- Usar para fins comerciais. \n"
-        "-Modificar ou criar obras derivadas. \n"
+        "- Modificar ou criar obras derivadas. \n"
     )
     messagebox.showinfo("Sobre", mensagem)
 
