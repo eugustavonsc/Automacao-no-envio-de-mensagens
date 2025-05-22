@@ -72,8 +72,8 @@ class APIClient:
             **self.base_headers,
             # "Origin" e "Referer" podem não ser necessários para todas as APIs
             # ou podem precisar ser configuráveis.
-            # "Origin": "https://sac.lifthubsolucoes.com.br",
-            # "Referer": "https://sac.lifthubsolucoes.com.br/",
+            "Origin": "https://sac.lifthubsolucoes.com.br",
+            "Referer": "https://sac.lifthubsolucoes.com.br/",
         }
         try:
             with open(caminho_arquivo, "rb") as arquivo_midia:
