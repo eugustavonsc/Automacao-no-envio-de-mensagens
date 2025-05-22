@@ -43,7 +43,7 @@ class APIClient:
             "body": mensagem
         }
         try:
-            response = requests.post(self.api_url, headers=headers, json=payload, timeout=10) # Adicionado timeout
+            response = requests.post(self.api_url, headers=headers, json=payload, timeout=25) # Adicionado timeout
             response.raise_for_status() # Levanta HTTPError para respostas 4xx/5xx
             # Tenta decodificar JSON, mas trata caso de resposta vazia ou não-JSON
             try:
@@ -199,7 +199,7 @@ def processar_envio_individual_thread(fila_trabalho, fila_resultados, mensagem_u
                 resultado = api_client_global.enviar_mensagem_texto(numero_padronizado, mensagem_universal)
         
         fila_resultados.put((index, resultado['status'], resultado['detalhes']))
-        time.sleep(0.5) # Pausa para não sobrecarregar a API (ajuste conforme necessário)
+        time.sleep(1) # Pausa para não sobrecarregar a API (ajuste conforme necessário)
         fila_trabalho.task_done()
 
 
