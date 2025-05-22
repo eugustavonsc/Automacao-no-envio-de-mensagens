@@ -83,7 +83,7 @@ class APIClient:
                     "number": numero,
                     "openTicket": str(abrir_ticket),
                     "queueId": str(id_fila),
-                    "body": mensagem
+                    "Body": mensagem
                 }
                 files_payload = {
                     "medias": (
