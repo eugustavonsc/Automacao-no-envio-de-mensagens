@@ -14,7 +14,7 @@ from queue import Queue
 import re
 from mimetypes import guess_type
 import logging
-import random ### ALTERAÇÃO INÍCIO ### (Importamos a biblioteca random)
+import random
 
 # Configuração de logging avançado
 log_path = Path(__file__).parent / 'envio_mensagens.log'
@@ -64,7 +64,7 @@ class APIClient:
             try:
                 response_data = response.json()
                 logger.info(f"[TEXTO] Resposta JSON: {response_data}")
-                return {"status": "Enviado", "detalhes": response_data.get("message", "Mensagem enviada com sucesso")}
+                return {"status": "Enviado", "detalhes": response_data.get("message", "Mensagem de texto enviada com sucesso")}
             except ValueError:
                 logger.warning(f"[TEXTO] Resposta não-JSON: {response.text}")
                 if response.text:
@@ -80,26 +80,30 @@ class APIClient:
             logger.exception(f"[TEXTO] Erro inesperado ao enviar mensagem para {numero}")
             return {"status": "Erro Inesperado", "detalhes": f"Erro desconhecido: {e}"}
 
+    ### ALTERAÇÃO INÍCIO ###
     def enviar_mensagem_midia(self, numero, mensagem, caminho_arquivo, abrir_ticket=1, id_fila=203):
         """
-        Envia uma mensagem com arquivo de mídia.
-        Retorna um dicionário com 'status' e 'detalhes'.
+        Envia uma mensagem com arquivo de mídia e, em seguida, a mensagem de texto.
+        Retorna um dicionário com o status da última operação (envio de texto).
         """
         headers = {
             **self.base_headers,
             "Origin": "https://sac.lifthubsolucoes.com.br",
             "Referer": "https://sac.lifthubsolucoes.com.br/",
         }
-        logger.info(f"[MIDIA] Enviando para {numero} | Arquivo: {caminho_arquivo} | Payload: mensagem='{mensagem}', abrir_ticket=1, id_fila=203")
+        logger.info(f"[MIDIA ETAPA 1] Enviando arquivo para {numero} | Arquivo: {caminho_arquivo}")
         try:
             with open(caminho_arquivo, "rb") as arquivo_midia:
                 tipo_mime = detectar_tipo_mime(caminho_arquivo)
+                
+                # Payload de dados sem a legenda (caption)
                 data_payload = {
                     "number": numero,
                     "openTicket": str(abrir_ticket),
                     "queueId": str(id_fila),
-                    "caption": mensagem  # Corrigido para caption
                 }
+                
+                # Payload do arquivo
                 files_payload = {
                     "medias": (
                         os.path.basename(caminho_arquivo),
@@ -107,32 +111,36 @@ class APIClient:
                         tipo_mime
                     )
                 }
-                logger.info(f"[MIDIA] Data: {data_payload} | Files: {files_payload['medias'][0]}, {files_payload['medias'][2]}")
-                response = requests.post(self.api_url, headers=headers, data=data_payload, files=files_payload, timeout=30)
-                logger.info(f"[MIDIA] Resposta HTTP {response.status_code} | Conteúdo: {response.text}")
-                response.raise_for_status()
-                try:
-                    response_data = response.json()
-                    logger.info(f"[MIDIA] Resposta JSON: {response_data}")
-                    return {"status": "Enviado", "detalhes": response_data.get("message", "Mensagem com mídia enviada com sucesso")}
-                except ValueError:
-                    logger.warning(f"[MIDIA] Resposta não-JSON: {response.text}")
-                    if response.text:
-                        return {"status": "Enviado?", "detalhes": f"Resposta não-JSON, mas status {response.status_code}: {response.text[:100]}"}
-                    return {"status": "Enviado", "detalhes": f"Mensagem com mídia enviada (status {response.status_code}), resposta vazia."}
+
+                # --- ETAPA 1: ENVIAR A MÍDIA ---
+                response_media = requests.post(self.api_url, headers=headers, data=data_payload, files=files_payload, timeout=30)
+                logger.info(f"[MIDIA ETAPA 1] Resposta HTTP {response_media.status_code} | Conteúdo: {response_media.text}")
+                response_media.raise_for_status() # Lança um erro se o status for 4xx ou 5xx
+                
+                # Se a mídia foi enviada com sucesso, agora enviamos o texto.
+                logger.info(f"[MIDIA ETAPA 2] Mídia enviada. Enviando texto para {numero}.")
+                
+                # --- ETAPA 2: ENVIAR O TEXTO ---
+                # O parâmetro openTicket=1 garante que a mensagem vá para o ticket
+                # recém-aberto pela imagem.
+                resultado_texto = self.enviar_mensagem_texto(numero, mensagem, abrir_ticket, id_fila)
+                
+                # Retorna o status da etapa final (envio do texto)
+                return resultado_texto
+
         except FileNotFoundError:
             logger.error(f"[MIDIA] Arquivo de mídia não encontrado: {caminho_arquivo}")
             return {"status": "Erro de Arquivo", "detalhes": f"Arquivo de mídia não encontrado: {caminho_arquivo}"}
         except requests.HTTPError as http_err:
-            logger.error(f"[MIDIA] Erro HTTP: {http_err.response.status_code} | {http_err.response.text}")
-            return {"status": "Erro HTTP", "detalhes": f"Erro {http_err.response.status_code}: {http_err.response.text}"}
+            detalhes_erro = f"Erro {http_err.response.status_code}: {http_err.response.text}"
+            logger.error(f"[MIDIA] Erro HTTP na ETAPA 1 (envio de arquivo): {detalhes_erro}")
+            return {"status": "Erro HTTP (Mídia)", "detalhes": detalhes_erro}
         except requests.RequestException as req_err:
-            logger.error(f"[MIDIA] Erro de Requisição: {req_err}")
-            return {"status": "Erro de Requisição", "detalhes": f"Erro de conexão/timeout: {req_err}"}
+            logger.error(f"[MIDIA] Erro de Requisição na ETAPA 1 (envio de arquivo): {req_err}")
+            return {"status": "Erro de Requisição (Mídia)", "detalhes": f"Erro de conexão/timeout ao enviar mídia: {req_err}"}
         except Exception as e:
             logger.exception(f"[MIDIA] Erro inesperado ao enviar mídia para {numero}")
-            return {"status": "Erro Inesperado", "detalhes": f"Erro desconhecido ao enviar mídia: {e}"}
-
+            return {"status": "Erro Inesperado (Mídia)", "detalhes": f"Erro desconhecido ao enviar mídia: {e}"}
 # ==================================================
 # Funções de Configuração
 # ==================================================
