@@ -8,3 +8,8 @@ venv
 *jpeg
 *gif
 *.log
+
+# Artefatos de build
+build/
+dist/
+*.spec
